@@ -68,13 +68,13 @@ export const t = {
 } as const;
 
 export const fmtCurrency = (n: number) =>
-  new Intl.NumberFormat('ar-EG', { maximumFractionDigits: 2 }).format(n) + ' ر.س';
+  new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(n) + ' د.ل';
 
 export const fmtNum = (n: number) =>
-  new Intl.NumberFormat('ar-EG', { maximumFractionDigits: 2 }).format(n);
+  new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(n);
 
 export const fmtDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('ar-EG', {
+  new Date(iso).toLocaleDateString('ar-LY', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
