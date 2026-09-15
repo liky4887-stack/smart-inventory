@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Search, Plus, Package } from 'lucide-react';
 import { useStore } from '../store';
 import { colors } from '../theme';
-import { t, fmtCurrency } from '../i18n';
+import { t, fmtCurrency, fmtNum } from '../i18n';
 import { hapticLight, hapticMedium, hapticSuccess } from '../lib/haptics';
 import { supabase } from '../lib/supabase';
 import type { Item } from '../types';
@@ -24,36 +24,36 @@ export default function InventoryScreen({ onItemSelect, onAddNew }: Props) {
   const filtered = useMemo(() => {
     let result = items;
     if (query) {
-      const q = query.toLowerCase();
+      const normalizedQuery = query.toLowerCase();
       result = result.filter(
-        (i) =>
-          i.name.toLowerCase().includes(q) ||
-          (i.barcode || '').includes(q)
+        (item) =>
+          item.name.toLowerCase().includes(normalizedQuery) ||
+          (item.barcode || '').includes(normalizedQuery)
       );
     }
     if (filter === 'low') {
       result = result.filter(
-        (i) => i.quantity <= i.min_threshold && i.quantity > 0
+        (item) => item.quantity <= item.min_threshold && item.quantity > 0
       );
     } else if (filter === 'out') {
-      result = result.filter((i) => i.quantity <= 0);
+      result = result.filter((item) => item.quantity <= 0);
     }
     return result;
   }, [items, query, filter]);
 
   const sellOne = useCallback(
-    async (item: Item, e: React.MouseEvent) => {
-      e.stopPropagation();
+    async (item: Item, event: React.MouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation();
       hapticSuccess();
       const receipt = `INV-${Date.now()}`;
-      try {
-        await supabase.from('sales').insert({
-          item_id: item.id,
-          qty: 1,
-          unit_price: item.sell_price,
-          payment_method: 'cash',
-          receipt_no: receipt,
-        });
+      const { error: saleError } = await supabase.from('sales').insert({
+        item_id: item.id,
+        qty: 1,
+        unit_price: item.sell_price,
+        payment_method: 'cash',
+        receipt_no: receipt,
+      });
+      if (!saleError) {
         await supabase
           .from('items')
           .update({
@@ -61,16 +61,14 @@ export default function InventoryScreen({ onItemSelect, onAddNew }: Props) {
             updated_at: new Date().toISOString(),
           })
           .eq('id', item.id);
-        loadItems();
-      } catch {
-        // offline or error
+        await loadItems();
       }
     },
     [loadItems]
   );
 
   return (
-    <div className="screen-content">
+    <div className="screen-content inventory-screen">
       <header className="screen-header">
         <h1 className="screen-title">{t.inventory}</h1>
         <p className="screen-subtitle">{items.length} منتج</p>
@@ -79,15 +77,16 @@ export default function InventoryScreen({ onItemSelect, onAddNew }: Props) {
       <div className="search-bar">
         <Search size={18} color={colors.textDim} />
         <input
-          type="text"
+          type="search"
+          inputMode="search"
           placeholder={t.search_placeholder}
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(event) => setQuery(event.target.value)}
           className="search-input"
         />
       </div>
 
-      <div className="filter-tabs">
+      <div className="filter-tabs" role="tablist" aria-label="تصفية المخزون">
         <button
           className={filter === 'all' ? 'filter-tab active' : 'filter-tab'}
           onClick={() => setFilter('all')}
@@ -130,13 +129,13 @@ export default function InventoryScreen({ onItemSelect, onAddNew }: Props) {
                 <div className="item-row-main">
                   <span className="item-name">{item.name}</span>
                   <div className="item-meta">
+                    <span className="item-status" data-state={isOut ? 'out' : isLow ? 'low' : 'ready'}>
+                      {isOut ? 'نفد' : isLow ? 'منخفض' : 'متوفر'}
+                    </span>
                     {item.barcode && (
                       <span className="item-barcode" dir="ltr">
                         {item.barcode}
                       </span>
-                    )}
-                    {item.category && (
-                      <span className="item-category">{item.category}</span>
                     )}
                   </div>
                 </div>
@@ -152,17 +151,12 @@ export default function InventoryScreen({ onItemSelect, onAddNew }: Props) {
                           : colors.text,
                       }}
                     >
-                      {item.quantity}
+                      {fmtNum(item.quantity)}
                     </span>
-                    <span className="item-price">
-                      {fmtCurrency(item.sell_price)}
-                    </span>
+                    <span className="item-price">{fmtCurrency(item.sell_price)}</span>
                   </div>
                   {item.quantity > 0 && (
-                    <button
-                      className="sell-btn"
-                      onClick={(e) => sellOne(item, e)}
-                    >
+                    <button className="sell-btn" onClick={(event) => sellOne(item, event)}>
                       {t.sell}
                     </button>
                   )}
@@ -176,8 +170,8 @@ export default function InventoryScreen({ onItemSelect, onAddNew }: Props) {
       <button className="fab" onClick={() => {
         hapticMedium();
         onAddNew();
-      }}>
-        <Plus size={28} />
+      }} aria-label={t.add_item}>
+        <Plus size={26} />
       </button>
     </div>
   );

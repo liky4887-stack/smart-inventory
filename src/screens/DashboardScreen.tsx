@@ -1,24 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  TrendingUp,
-  ShoppingBag,
-  DollarSign,
   AlertTriangle,
   ScanLine,
-  Trophy,
   FileText,
   RefreshCw,
+  ArrowLeft,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store';
-import KpiCard from '../components/KpiCard';
 import SyncPill from '../components/SyncPill';
 import { colors } from '../theme';
-import { t, fmtCurrency } from '../i18n';
+import { t, fmtCurrency, fmtNum } from '../i18n';
 import { hapticMedium, hapticHeavy } from '../lib/haptics';
 import { exportReport } from '../lib/pdf';
-import type { Screen } from '../types';
-import type { Item } from '../types';
+import type { Screen, Item } from '../types';
 
 type Props = {
   onNavigate: (s: Screen) => void;
@@ -27,13 +22,7 @@ type Props = {
 
 export default function DashboardScreen({ onNavigate, onItemSelect }: Props) {
   const { items, discrepancies, loadItems, loadDiscrepancies } = useStore();
-  const [kpi, setKpi] = useState({
-    sales: 0,
-    txs: 0,
-    profit: 0,
-    top: '—',
-    avg: 0,
-  });
+  const [kpi, setKpi] = useState({ sales: 0, txs: 0, profit: 0, top: '—', avg: 0 });
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
@@ -45,30 +34,23 @@ export default function DashboardScreen({ onNavigate, onItemSelect }: Props) {
       .gte('created_at', since);
 
     const salesTotal = (data || []).reduce(
-      (s, r: any) => s + Number(r.total),
+      (sum: number, row: any) => sum + Number(row.total),
       0
     );
     const txs = data?.length || 0;
-    const profit = (data || []).reduce((s, r: any) => {
-      const it = items.find((i) => i.id === r.item_id);
-      return s + (it ? (Number(r.unit_price) - Number(it.cost_price)) * Number(r.qty) : 0);
+    const profit = (data || []).reduce((sum: number, row: any) => {
+      const matchedItem = items.find((i) => i.id === row.item_id);
+      return sum + (matchedItem ? (Number(row.unit_price) - Number(matchedItem.cost_price)) * Number(row.qty) : 0);
     }, 0);
 
     const counts: Record<string, number> = {};
-    (data || []).forEach((r: any) => {
-      counts[r.item_id] = (counts[r.item_id] || 0) + Number(r.qty);
+    (data || []).forEach((row: any) => {
+      counts[row.item_id] = (counts[row.item_id] || 0) + Number(row.qty);
     });
     const topId = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
-    const topName =
-      items.find((i) => i.id === topId)?.name || '—';
+    const topName = items.find((i) => i.id === topId)?.name || '—';
 
-    setKpi({
-      sales: salesTotal,
-      txs,
-      profit,
-      top: topName,
-      avg: txs > 0 ? salesTotal / txs : 0,
-    });
+    setKpi({ sales: salesTotal, txs, profit, top: topName, avg: txs > 0 ? salesTotal / txs : 0 });
   }, [items, loadItems, loadDiscrepancies]);
 
   useEffect(() => {
@@ -76,10 +58,7 @@ export default function DashboardScreen({ onNavigate, onItemSelect }: Props) {
   }, [load]);
 
   const lowStock = items.filter((i) => i.quantity <= i.min_threshold);
-  const savedAmount = discrepancies.reduce(
-    (s, d) => s + Math.abs(d.delta) * 50,
-    0
-  );
+  const savedAmount = discrepancies.reduce((s, d) => s + Math.abs(d.delta) * 50, 0);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -101,10 +80,10 @@ export default function DashboardScreen({ onNavigate, onItemSelect }: Props) {
   };
 
   return (
-    <div className="screen-content">
+    <div className="screen-content dashboard-screen">
       <header className="screen-header">
         <div className="header-row">
-          <h1 className="screen-title">{t.dashboard}</h1>
+          <h1 className="screen-title">أدر مخزونك في دقيقة</h1>
           <SyncPill />
         </div>
         <p className="screen-subtitle">{t.last_30_days}</p>
@@ -118,35 +97,23 @@ export default function DashboardScreen({ onNavigate, onItemSelect }: Props) {
         <RefreshCw size={18} className={refreshing ? 'spin' : ''} />
       </button>
 
-      <div className="kpi-grid">
-        <KpiCard
-          label={t.total_sales}
-          value={fmtCurrency(kpi.sales)}
-          accent={colors.primary}
-          icon={<DollarSign size={20} />}
-          delay={0}
-        />
-        <KpiCard
-          label={t.transactions}
-          value={String(kpi.txs)}
-          accent={colors.gold}
-          icon={<ShoppingBag size={20} />}
-          delay={60}
-        />
-        <KpiCard
-          label={t.profit}
-          value={fmtCurrency(kpi.profit)}
-          accent={colors.success}
-          icon={<TrendingUp size={20} />}
-          delay={120}
-        />
-        <KpiCard
-          label={t.low_stock}
-          value={String(lowStock.length)}
-          accent={lowStock.length > 0 ? colors.danger : colors.success}
-          icon={<AlertTriangle size={20} />}
-          delay={180}
-        />
+      <div className="kpi-rows">
+        <div className="kpi-row">
+          <span className="kpi-row-label">{t.total_sales}</span>
+          <span className="kpi-row-value">{fmtCurrency(kpi.sales)}</span>
+        </div>
+        <div className="kpi-row">
+          <span className="kpi-row-label">{t.profit}</span>
+          <span className="kpi-row-value" style={{ color: colors.success }}>{fmtCurrency(kpi.profit)}</span>
+        </div>
+        <div className="kpi-row">
+          <span className="kpi-row-label">{t.transactions}</span>
+          <span className="kpi-row-value">{fmtNum(kpi.txs)}</span>
+        </div>
+        <div className="kpi-row">
+          <span className="kpi-row-label">{t.low_stock}</span>
+          <span className="kpi-row-value" style={{ color: lowStock.length > 0 ? colors.danger : colors.success }}>{fmtNum(lowStock.length)}</span>
+        </div>
       </div>
 
       {kpi.avg > 0 && (
@@ -178,13 +145,11 @@ export default function DashboardScreen({ onNavigate, onItemSelect }: Props) {
               >
                 <div className="low-stock-info">
                   <span className="low-stock-name">{item.name}</span>
-                  {item.location && (
-                    <span className="low-stock-loc">{item.location}</span>
-                  )}
+                  {item.location && <span className="low-stock-loc">{item.location}</span>}
                 </div>
                 <div className="low-stock-qty">
-                  <span className="low-stock-current">{item.quantity}</span>
-                  <span className="low-stock-min">/ {item.min_threshold}</span>
+                  <span className="low-stock-current">{fmtNum(item.quantity)}</span>
+                  <span className="low-stock-min">/ {fmtNum(item.min_threshold)}</span>
                 </div>
               </button>
             ))}
@@ -192,7 +157,7 @@ export default function DashboardScreen({ onNavigate, onItemSelect }: Props) {
         )}
       </section>
 
-      <div className="action-buttons">
+      <div className="dashboard-actions">
         <button
           className="action-btn action-btn-primary"
           onClick={() => {
@@ -204,14 +169,14 @@ export default function DashboardScreen({ onNavigate, onItemSelect }: Props) {
           <span>{t.quick_scan}</span>
         </button>
         <button
-          className="action-btn action-btn-gold"
+          className="text-link"
           onClick={() => {
             hapticMedium();
             onNavigate('highlights');
           }}
         >
-          <Trophy size={20} />
           <span>{t.highlights}</span>
+          <ArrowLeft size={18} />
         </button>
       </div>
 

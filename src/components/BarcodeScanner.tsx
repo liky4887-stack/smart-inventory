@@ -20,8 +20,7 @@ export default function BarcodeScanner({ onScan, onNew }: Props) {
   const [manualValue, setManualValue] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [scanned, setScanned] = useState(false);
-  const items = useStore((s) => s.items);
-  const loadItems = useStore((s) => s.loadItems);
+  const { items, loadItems } = useStore();
   const lockedRef = useRef(false);
 
   useEffect(() => {
